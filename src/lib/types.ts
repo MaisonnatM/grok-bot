@@ -16,11 +16,18 @@ export type Bot = {
   isHidden: boolean;
   status: AgentStatus;
   lastPreview: string | null;
-  avatarDataUrl: string | null;
+  avatarColor: string | null;
+  avatarHash: string | null;
+};
+
+export type Preferences = {
+  gatewayUrl: string;
+  gatewayToken: string;
 };
 
 export type GatewayError =
   | { kind: "not-configured" }
+  | { kind: "credentials-file"; detail: string }
   | { kind: "unreachable"; cause: string }
   | { kind: "unauthorized" }
   | { kind: "rejected"; status: number; body: string }
@@ -69,7 +76,9 @@ export function statusLabel(status: AgentStatus): string {
 export function gatewayErrorMessage(error: GatewayError): string {
   switch (error.kind) {
     case "not-configured":
-      return "Set Gateway URL and token in extension preferences.";
+      return "Set Gateway URL and token in extension preferences, or in ~/.config/grok-bot-raycast/gateway.env.";
+    case "credentials-file":
+      return `Can't use ~/.config/grok-bot-raycast/gateway.env. ${error.detail}`;
     case "unreachable":
       return `Gateway unreachable. ${error.cause}`;
     case "unauthorized":

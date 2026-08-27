@@ -1,22 +1,35 @@
+import { join } from "node:path";
+import { unlinkSync } from "node:fs";
+import { environment } from "@raycast/api";
 import { AgentId, Bot, GatewayError, Result, err, ok } from "./types";
-import { parseAgentList } from "./parse-bot";
-import { getPreferences, isGatewayConfigured, normalizeGatewayUrl } from "./preferences";
+import { parseBot } from "./parse-bot";
+import { normalizeGatewayUrl } from "./gateway-config";
+import { resolveGatewayConfig } from "./preferences";
+import { streamJsonObjectsSkippingField } from "./strip-json-string-field";
+import { CapturedAvatar, createAvatarCaptureSink, materializeAvatarThumbnail } from "./avatar-thumbnail";
 
-const REQUEST_TIMEOUT_MS = 30_000;
+const LIST_TIMEOUT_MS = 120_000;
+const SEND_TIMEOUT_MS = 30_000;
+const AVATAR_FIELD = "avatarDataUrl";
 
 type GatewayConfig = {
   baseUrl: string;
   token: string;
 };
 
+type ListAgentsOptions = {
+  signal?: AbortSignal;
+  onUpdate?: (bots: Bot[]) => void;
+};
+
 function getConfig(): Result<GatewayConfig, GatewayError> {
-  const prefs = getPreferences();
-  if (!isGatewayConfigured(prefs)) {
-    return err({ kind: "not-configured" });
+  const prefs = resolveGatewayConfig();
+  if (!prefs.ok) {
+    return prefs;
   }
   return ok({
-    baseUrl: normalizeGatewayUrl(prefs.gatewayUrl),
-    token: prefs.gatewayToken,
+    baseUrl: normalizeGatewayUrl(prefs.value.gatewayUrl),
+    token: prefs.value.gatewayToken,
   });
 }
 
@@ -27,14 +40,6 @@ function networkCause(error: unknown): string {
   return "Unknown network error";
 }
 
-async function readResponseBody(response: Response): Promise<string> {
-  try {
-    return await response.text();
-  } catch {
-    return "";
-  }
-}
-
 function redactSecret(text: string, token: string): string {
   if (token.length === 0) {
     return text;
@@ -42,15 +47,38 @@ function redactSecret(text: string, token: string): string {
   return text.split(token).join("[redacted]");
 }
 
-async function fetchJson(
-  config: GatewayConfig,
+function requestSignal(user: AbortSignal | undefined, timeoutMs: number): AbortSignal {
+  const timeout = AbortSignal.timeout(timeoutMs);
+  if (!user) {
+    return timeout;
+  }
+  return AbortSignal.any([timeout, user]);
+}
+
+function isUserAbort(user?: AbortSignal): boolean {
+  return user?.aborted === true;
+}
+
+async function postGateway(
   path: string,
-  init: RequestInit,
-): Promise<Result<unknown, GatewayError>> {
+  body: string,
+  options?: { signal?: AbortSignal; timeoutMs?: number },
+): Promise<Result<Response, GatewayError>> {
+  const configResult = getConfig();
+  if (!configResult.ok) {
+    return configResult;
+  }
+  const config = configResult.value;
+
   try {
     const response = await fetch(`${config.baseUrl}${path}`, {
-      ...init,
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.token}`,
+        "Content-Type": "application/json",
+      },
+      body,
+      signal: requestSignal(options?.signal, options?.timeoutMs ?? SEND_TIMEOUT_MS),
     });
 
     if (response.status === 401 || response.status === 403) {
@@ -58,16 +86,15 @@ async function fetchJson(
     }
 
     if (!response.ok) {
-      const body = redactSecret(await readResponseBody(response), config.token);
-      return err({ kind: "rejected", status: response.status, body });
+      const rejected = redactSecret(await response.text(), config.token);
+      return err({ kind: "rejected", status: response.status, body: rejected });
     }
 
-    try {
-      return ok(await response.json());
-    } catch {
-      return err({ kind: "invalid-response", detail: "response is not valid JSON" });
-    }
+    return ok(response);
   } catch (error) {
+    if (isUserAbort(options?.signal)) {
+      return err({ kind: "unreachable", cause: "aborted" });
+    }
     return err({ kind: "unreachable", cause: redactSecret(networkCause(error), config.token) });
   }
 }
@@ -83,34 +110,133 @@ function parseSendPromptPayload(raw: unknown): Result<{ accepted: true }, Gatewa
   return ok({ accepted: true });
 }
 
-async function postGateway(path: string, body: string): Promise<Result<unknown, GatewayError>> {
-  const configResult = getConfig();
-  if (!configResult.ok) {
-    return configResult;
+function finishAgentList(input: {
+  sawList: boolean;
+  complete: boolean;
+  emitted: number;
+  bots: Bot[];
+  firstParseError: string;
+}): Result<Bot[], GatewayError> {
+  if (input.bots.length > 0) {
+    return ok(input.bots);
   }
-
-  return fetchJson(configResult.value, path, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${configResult.value.token}`,
-      "Content-Type": "application/json",
-    },
-    body,
-  });
+  if (input.sawList && input.complete && input.emitted === 0) {
+    return ok([]);
+  }
+  if (input.sawList && input.emitted > 0) {
+    return err({ kind: "invalid-response", detail: input.firstParseError || "agents did not parse" });
+  }
+  if (!input.complete) {
+    return err({ kind: "invalid-response", detail: "response is not valid JSON" });
+  }
+  return err({ kind: "invalid-response", detail: "expected array or { agents: [...] }" });
 }
 
-export async function listAgents(): Promise<Result<Bot[], GatewayError>> {
-  const response = await postGateway("/api/listAgents", "{}");
+export async function listAgents(options?: ListAgentsOptions): Promise<Result<Bot[], GatewayError>> {
+  const response = await postGateway("/api/listAgents", "{}", {
+    signal: options?.signal,
+    timeoutMs: LIST_TIMEOUT_MS,
+  });
   if (!response.ok) {
     return response;
   }
 
-  const parsed = parseAgentList(response.value);
-  if (!parsed.ok) {
-    return err({ kind: "invalid-response", detail: parsed.error });
-  }
+  const collected: Bot[] = [];
+  let emitted = 0;
+  let firstParseError = "";
+  let thumbs = Promise.resolve();
+  const avatarDir = join(environment.supportPath, "avatars");
 
-  return ok(parsed.value);
+  const dropCapture = (captured: CapturedAvatar | null): void => {
+    if (captured === null) {
+      return;
+    }
+    try {
+      unlinkSync(captured.sourcePath);
+    } catch {
+      return;
+    }
+  };
+
+  const onObject = (json: string, captured: CapturedAvatar | null) => {
+    emitted += 1;
+    if (options?.signal?.aborted) {
+      dropCapture(captured);
+      return;
+    }
+    let raw: unknown;
+    try {
+      raw = JSON.parse(json);
+    } catch {
+      dropCapture(captured);
+      if (firstParseError.length === 0) {
+        firstParseError = "agent object is not valid JSON";
+      }
+      return;
+    }
+    const parsed = parseBot(raw);
+    if (!parsed.ok) {
+      dropCapture(captured);
+      if (firstParseError.length === 0) {
+        firstParseError = parsed.error;
+      }
+      return;
+    }
+    const bot = parsed.value;
+    collected.push(bot);
+    options?.onUpdate?.([...collected]);
+
+    if (captured === null) {
+      return;
+    }
+    thumbs = thumbs.then(async () => {
+      if (options?.signal?.aborted) {
+        dropCapture(captured);
+        return;
+      }
+      const hash = await materializeAvatarThumbnail({
+        supportPath: environment.supportPath,
+        agentId: bot.id,
+        sourcePath: captured.sourcePath,
+        hash: captured.hash,
+      });
+      bot.avatarHash = hash;
+      if (!options?.signal?.aborted) {
+        options?.onUpdate?.([...collected]);
+      }
+    });
+  };
+
+  try {
+    const http = response.value;
+    if (!http.body) {
+      return err({ kind: "invalid-response", detail: "response has no body" });
+    }
+
+    const streamed = await streamJsonObjectsSkippingField(http.body, AVATAR_FIELD, onObject, {
+      createSink: () => createAvatarCaptureSink(avatarDir),
+      afterChunk: () => thumbs,
+    });
+
+    if (options?.signal?.aborted) {
+      return err({ kind: "unreachable", cause: "aborted" });
+    }
+
+    await thumbs;
+
+    return finishAgentList({
+      sawList: streamed.sawList,
+      complete: streamed.complete,
+      emitted,
+      bots: collected,
+      firstParseError,
+    });
+  } catch (error) {
+    if (isUserAbort(options?.signal)) {
+      return err({ kind: "unreachable", cause: "aborted" });
+    }
+    return err({ kind: "invalid-response", detail: networkCause(error) });
+  }
 }
 
 export async function sendPrompt(input: {
@@ -120,10 +246,16 @@ export async function sendPrompt(input: {
   const response = await postGateway(
     "/api/sendPrompt",
     JSON.stringify({ agentId: input.agentId, prompt: input.prompt }),
+    { timeoutMs: SEND_TIMEOUT_MS },
   );
   if (!response.ok) {
     return response;
   }
 
-  return parseSendPromptPayload(response.value);
+  try {
+    const raw: unknown = await response.value.json();
+    return parseSendPromptPayload(raw);
+  } catch {
+    return err({ kind: "invalid-response", detail: "response is not valid JSON" });
+  }
 }

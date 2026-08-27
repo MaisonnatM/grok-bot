@@ -4,18 +4,52 @@ function normalize(value: string): string {
   return value.trim().toLowerCase();
 }
 
-export function matchBotForSend(bots: Bot[], query: string): Bot | null {
+export type MatchBotForSend =
+  { kind: "matched"; bot: Bot } | { kind: "ambiguous"; candidates: Bot[] } | { kind: "none" };
+
+export function matchBotForSend(bots: Bot[], query: string): MatchBotForSend {
   const needle = normalize(query);
   if (needle.length === 0) {
-    return null;
+    return { kind: "none" };
   }
 
   const byId = bots.find((bot) => normalize(bot.id) === needle);
   if (byId) {
-    return byId;
+    return { kind: "matched", bot: byId };
   }
 
-  return bots.find((bot) => normalize(bot.name) === needle) ?? null;
+  const byName = bots.find((bot) => normalize(bot.name) === needle);
+  if (byName) {
+    return { kind: "matched", bot: byName };
+  }
+
+  const substringHits = bots.filter(
+    (bot) => normalize(bot.name).includes(needle) || normalize(bot.title).includes(needle),
+  );
+  if (substringHits.length === 1) {
+    const [bot] = substringHits;
+    if (bot) {
+      return { kind: "matched", bot };
+    }
+  }
+  if (substringHits.length > 1) {
+    return { kind: "ambiguous", candidates: substringHits };
+  }
+
+  return { kind: "none" };
+}
+
+export function unmatchedSendMessage(query: string, result: Exclude<MatchBotForSend, { kind: "matched" }>): string {
+  switch (result.kind) {
+    case "ambiguous":
+      return `No bot matched "${query}". Candidates: ${result.candidates.map((bot) => bot.name).join(", ")}.`;
+    case "none":
+      return `No bot matched "${query}". Use list-bots to see teammates.`;
+    default: {
+      const _exhaustive: never = result;
+      return _exhaustive;
+    }
+  }
 }
 
 export function matchesListQuery(bot: Bot, query: string): boolean {
@@ -46,8 +80,8 @@ export function filterBotsForList(bots: Bot[], query: string): { individuals: Bo
 export function resolveInitialBot(input: { bots: Bot[]; query?: string; lastId: AgentId | null }): Bot | null {
   if (input.query) {
     const named = matchBotForSend(input.bots, input.query);
-    if (named) {
-      return named;
+    if (named.kind === "matched") {
+      return named.bot;
     }
   }
 

@@ -13,10 +13,10 @@ import { useEffect, useState } from "react";
 import { useBots } from "./hooks/use-bots";
 import { getLastBotId } from "./lib/last-bot";
 import { resolveInitialBot } from "./lib/match-bot";
-import { openGrokBot } from "./lib/open-app";
 import { AgentId } from "./lib/types";
 import { AskForm } from "./views/ask-form";
 import { GatewayEmptyView } from "./views/gateway-empty";
+import { OpenGrokBotAction } from "./views/open-grok-bot-action";
 
 type AskArguments = {
   question?: string;
@@ -55,7 +55,7 @@ export default function AskCommand(props: LaunchProps<{ arguments: AskArguments;
   const fallback = props.fallbackText?.trim() ?? "";
   const messageReady = selectedText !== null;
   const lastReady = lastBotId !== undefined;
-  const rosterReady = !isLoading;
+  const rosterReady = !isLoading || bots.length > 0;
   const ready = messageReady && lastReady && rosterReady;
 
   if (!ready) {
@@ -67,7 +67,7 @@ export default function AskCommand(props: LaunchProps<{ arguments: AskArguments;
       <List
         actions={
           <ActionPanel>
-            <Action title="Open Grok Bot" icon={Icon.AppWindow} onAction={openGrokBot} />
+            <OpenGrokBotAction />
             <Action title="Open Preferences" icon={Icon.Gear} onAction={openExtensionPreferences} />
           </ActionPanel>
         }

@@ -2,11 +2,17 @@
   "$schema": "https://www.raycast.com/schemas/extension.json",
   "name": "grok-bot",
   "title": "Grok Bot",
-  "description": "Message your Grok Bot teammates from Raycast.",
+  "description": "Unofficial Grok Bot client for Raycast on macOS (macOS only). Not on Raycast for iOS or Windows. Not affiliated with xAI.",
   "icon": "icon.png",
-  "author": "maxencemaisonnat",
-  "platforms": ["macOS"],
-  "categories": ["Productivity", "Developer Tools"],
+  "author": "maxence_maisonnat",
+  "platforms": [
+    "macOS"
+  ],
+  "categories": [
+    "Productivity",
+    "Developer Tools",
+    "Communication"
+  ],
   "license": "MIT",
   "commands": [
     {
@@ -15,7 +21,11 @@
       "subtitle": "Grok Bot",
       "description": "Search your Grok Bot teammates and send a task",
       "mode": "view",
-      "keywords": ["teammates", "roster", "agents"]
+      "keywords": [
+        "teammates",
+        "roster",
+        "agents"
+      ]
     },
     {
       "name": "ask",
@@ -23,7 +33,11 @@
       "subtitle": "Grok Bot",
       "description": "Send a task to a Grok Bot teammate",
       "mode": "view",
-      "keywords": ["send", "task", "message"],
+      "keywords": [
+        "send",
+        "task",
+        "message"
+      ],
       "arguments": [
         {
           "name": "question",
@@ -53,8 +67,8 @@
       "type": "textfield",
       "required": false,
       "title": "Gateway URL",
-      "placeholder": "http://127.0.0.1:1340",
-      "description": "HTTP URL for the Sand gateway on your Grok Bot computer, usually through Tailscale or an SSH tunnel"
+      "placeholder": "https://your-box.ts.net",
+      "description": "Tailscale Serve URL for the Sand gateway, for example https://box.ts.net"
     },
     {
       "name": "gatewayToken",
@@ -66,9 +80,14 @@
   ],
   "tools": [
     {
+      "name": "list-bots",
+      "title": "List Bots",
+      "description": "List Grok Bot teammates. Optional query filters by name or title."
+    },
+    {
       "name": "send-to-bot",
       "title": "Send to Bot",
-      "description": "Send a prompt to a named Grok Bot teammate"
+      "description": "Send a prompt to a named Grok Bot teammate. Call list-bots when the name is unclear."
     }
   ],
   "dependencies": {
@@ -87,8 +106,9 @@
   "scripts": {
     "build": "ray build",
     "dev": "ray develop",
-    "lint": "ray lint",
-    "fix-lint": "ray lint --fix",
+    "lint": "eslint src && prettier --check \"**/*.{ts,tsx,md}\"",
+    "fix-lint": "eslint src --fix && prettier --write \"**/*.{ts,tsx,md}\"",
+    "lint:store": "ray lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "test": "vitest run",
     "publish": "npx @raycast/api@latest publish"

@@ -48,6 +48,30 @@ function deriveStatus(raw: Record<string, unknown>): AgentStatus {
   return { kind: "idle" };
 }
 
+function readAvatarHash(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  if (!/^[a-f0-9]{16}$/.test(value)) {
+    return null;
+  }
+  return value;
+}
+
+function readAvatarColor(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (/^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(trimmed)) {
+    return trimmed;
+  }
+  if (/^(?:rgb|hsl)a?\([^)]{1,64}\)$/i.test(trimmed)) {
+    return trimmed;
+  }
+  return null;
+}
+
 export function parseBot(raw: unknown): Result<Bot, string> {
   if (typeof raw !== "object" || raw === null) {
     return err("agent must be an object");
@@ -68,28 +92,31 @@ export function parseBot(raw: unknown): Result<Bot, string> {
     isHidden: readBoolean(record.isHiddenFromSidebar),
     status: deriveStatus(record),
     lastPreview: readNullableString(record.lastMessagePreview),
-    avatarDataUrl: readNullableString(record.avatarDataUrl),
+    avatarColor: readAvatarColor(record.avatarColor),
+    avatarHash: readAvatarHash(record.avatarHash),
   });
 }
 
 export function parseAgentList(raw: unknown): Result<Bot[], string> {
-  let items: unknown[];
-
-  if (Array.isArray(raw)) {
-    items = raw;
-  } else if (typeof raw === "object" && raw !== null && Array.isArray((raw as Record<string, unknown>).agents)) {
-    items = (raw as Record<string, unknown>).agents as unknown[];
-  } else {
-    return err("expected array or { agents: [...] }");
+  if (!Array.isArray(raw)) {
+    return err("expected an array of agents");
   }
 
   const bots: Bot[] = [];
-  for (const item of items) {
+  let firstError = "";
+  for (const item of raw) {
     const parsed = parseBot(item);
     if (!parsed.ok) {
-      return err(parsed.error);
+      if (firstError.length === 0) {
+        firstError = parsed.error;
+      }
+      continue;
     }
     bots.push(parsed.value);
+  }
+
+  if (bots.length === 0 && raw.length > 0) {
+    return err(firstError);
   }
 
   return ok(bots);

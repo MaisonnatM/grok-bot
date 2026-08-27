@@ -1,6 +1,6 @@
 import { Action, ActionPanel, Icon, List, openExtensionPreferences } from "@raycast/api";
-import { openGrokBot } from "../lib/open-app";
 import { GatewayError, gatewayErrorMessage } from "../lib/types";
+import { OpenGrokBotAction } from "./open-grok-bot-action";
 
 type EmptyActions = "prefs" | "retry";
 
@@ -24,6 +24,12 @@ function emptyCopy(error: GatewayError | null): EmptyCopy {
       return {
         title: "Can't reach your bots",
         description: "Open Grok Bot to keep working, or set the gateway URL and token in preferences.",
+        actions: "prefs",
+      };
+    case "credentials-file":
+      return {
+        title: "Can't use gateway.env",
+        description: error.detail,
         actions: "prefs",
       };
     case "unauthorized":
@@ -56,7 +62,7 @@ function EmptyActionsPanel({ kind, onRetry }: { kind: EmptyActions; onRetry: () 
   if (kind === "prefs") {
     return (
       <ActionPanel>
-        <Action title="Open Grok Bot" icon={Icon.AppWindow} onAction={openGrokBot} />
+        <OpenGrokBotAction />
         <Action title="Open Preferences" icon={Icon.Gear} onAction={openExtensionPreferences} />
       </ActionPanel>
     );
@@ -64,7 +70,7 @@ function EmptyActionsPanel({ kind, onRetry }: { kind: EmptyActions; onRetry: () 
 
   return (
     <ActionPanel>
-      <Action title="Open Grok Bot" icon={Icon.AppWindow} onAction={openGrokBot} />
+      <OpenGrokBotAction />
       <Action title="Retry" icon={Icon.ArrowClockwise} onAction={onRetry} />
     </ActionPanel>
   );
@@ -88,7 +94,7 @@ export function SearchEmptyView() {
       description="Try another name, or clear the search."
       actions={
         <ActionPanel>
-          <Action title="Open Grok Bot" icon={Icon.AppWindow} onAction={openGrokBot} />
+          <OpenGrokBotAction />
         </ActionPanel>
       }
     />
@@ -102,7 +108,7 @@ export function HiddenBotsEmptyView() {
       description="Search by name to find teammates hidden from the sidebar."
       actions={
         <ActionPanel>
-          <Action title="Open Grok Bot" icon={Icon.AppWindow} onAction={openGrokBot} />
+          <OpenGrokBotAction />
         </ActionPanel>
       }
     />

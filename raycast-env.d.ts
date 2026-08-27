@@ -8,7 +8,7 @@
 /* eslint-disable @typescript-eslint/ban-types */
 
 type ExtensionPreferences = {
-  /** Gateway URL - HTTP URL for the Sand gateway on your Grok Bot computer, usually through Tailscale or an SSH tunnel */
+  /** Gateway URL - Tailscale Serve URL for the Sand gateway, for example https://box.ts.net */
   "gatewayUrl"?: string,
   /** Gateway Token - Bearer token from gateway.json on the Bot computer. Treat it like a password. */
   "gatewayToken"?: string

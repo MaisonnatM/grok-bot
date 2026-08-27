@@ -28,7 +28,8 @@ describe("parseBot", () => {
       isHidden: false,
       status: { kind: "idle" },
       lastPreview: "Hello",
-      avatarDataUrl: "data:image/png;base64,abc",
+      avatarColor: null,
+      avatarHash: null,
     });
   });
 
@@ -114,6 +115,39 @@ describe("parseBot", () => {
       expect(result.value.isGroup).toBe(true);
     }
   });
+
+  it("keeps a host avatar color and ignores inlined photos", () => {
+    const result = parseBot({
+      ...baseAgent,
+      avatarColor: "#2563EB",
+      avatarDataUrl: `data:image/png;base64,${"a".repeat(5000)}`,
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.avatarColor).toBe("#2563EB");
+      expect(result.value.avatarHash).toBeNull();
+    }
+  });
+
+  it("keeps a valid avatarHash and drops invalid values", () => {
+    const kept = parseBot({ ...baseAgent, avatarHash: "abcabcabcabcabca" });
+    expect(kept.ok).toBe(true);
+    if (kept.ok) {
+      expect(kept.value.avatarHash).toBe("abcabcabcabcabca");
+    }
+
+    const short = parseBot({ ...baseAgent, avatarHash: "abc" });
+    expect(short.ok).toBe(true);
+    if (short.ok) {
+      expect(short.value.avatarHash).toBeNull();
+    }
+
+    const pathLike = parseBot({ ...baseAgent, avatarHash: "../../../etc/passwd" });
+    expect(pathLike.ok).toBe(true);
+    if (pathLike.ok) {
+      expect(pathLike.value.avatarHash).toBeNull();
+    }
+  });
 });
 
 describe("parseAgentList", () => {
@@ -126,11 +160,16 @@ describe("parseAgentList", () => {
     }
   });
 
-  it("accepts an agents wrapper", () => {
+  it("rejects a non-array", () => {
     const result = parseAgentList({ agents: [baseAgent] });
+    expect(result.ok).toBe(false);
+  });
+
+  it("skips agents that do not parse and keeps the rest", () => {
+    const result = parseAgentList([{ id: "  " }, baseAgent]);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.value).toHaveLength(1);
+      expect(result.value.map((bot) => bot.name)).toEqual(["Piper"]);
     }
   });
 });
