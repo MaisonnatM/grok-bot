@@ -51,7 +51,7 @@ export default function AskCommand(props: LaunchProps<{ arguments: AskArguments;
     return <Form isLoading />;
   }
 
-  if (error || bots.length === 0) {
+  if (bots.length === 0) {
     return (
       <List>
         <GatewayEmptyView error={error} onRetry={revalidate} />

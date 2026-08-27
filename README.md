@@ -180,6 +180,8 @@ Without a URL and token, **List Bots** and **Ask Bot** still offer **Open Grok B
 
 ## Fix a failed List Bots
 
+If teammates are still listed, that is the last successful roster. A failure toast means the refresh failed. Retry, or match the toast to a title below.
+
 Match the empty-state title.
 
 **Can't reach your bots**, and the action is **Open Preferences**. Set **Gateway URL** and **Gateway Token**, or add a valid `gateway.env`. A listener on this Mac at `:1340` is not the gateway.

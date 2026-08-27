@@ -1,13 +1,14 @@
-import { Action, ActionPanel, Icon, Keyboard, List, openExtensionPreferences } from "@raycast/api";
+import { Action, ActionPanel, Icon, Keyboard, List } from "@raycast/api";
 import { useFrecencySorting } from "@raycast/utils";
 import { useMemo, useState } from "react";
 import { useBots } from "./hooks/use-bots";
 import { botListIcon } from "./lib/bot-icon";
+import { extensionIcon } from "./lib/extension-icon";
 import { filterBotsForList } from "./lib/match-bot";
 import { Bot, statusLabel } from "./lib/types";
 import { AskForm } from "./views/ask-form";
-import { ChromeActionPanel, GatewayEmptyView, HiddenBotsEmptyView, SearchEmptyView } from "./views/gateway-empty";
-import { OpenGrokBotAction } from "./views/open-grok-bot-action";
+import { ChromeActionPanel, ChromeActions } from "./views/chrome-actions";
+import { GatewayEmptyView, HiddenBotsEmptyView, SearchEmptyView } from "./views/gateway-empty";
 
 const COPY_ID_SHORTCUT: Keyboard.Shortcut = { modifiers: ["cmd", "shift"], key: "c" };
 
@@ -38,11 +39,11 @@ function BotListItem({
         <ActionPanel>
           <Action.Push
             title="Ask Bot"
-            icon={Icon.Message}
+            icon={extensionIcon}
             target={<AskForm bots={bots} initialBotId={bot.id} />}
             onPush={() => onVisit(bot)}
           />
-          <OpenGrokBotAction />
+          <ChromeActions kind="refresh" onRefresh={onRefresh} />
           <ActionPanel.Section>
             <Action.CopyToClipboard
               title="Copy ID"
@@ -51,15 +52,6 @@ function BotListItem({
               shortcut={COPY_ID_SHORTCUT}
             />
             <Action.CopyToClipboard title="Copy Name" icon={Icon.Text} content={bot.name} />
-          </ActionPanel.Section>
-          <ActionPanel.Section>
-            <Action
-              title="Refresh"
-              icon={Icon.ArrowClockwise}
-              shortcut={Keyboard.Shortcut.Common.Refresh}
-              onAction={onRefresh}
-            />
-            <Action title="Open Preferences" icon={Icon.Gear} onAction={openExtensionPreferences} />
           </ActionPanel.Section>
           <ActionPanel.Section>
             <Action title="Reset Ranking" icon={Icon.ArrowCounterClockwise} onAction={() => onResetRanking(bot)} />
@@ -83,10 +75,10 @@ export default function BotsCommand() {
   const query = searchText.trim();
   const { groups, individuals, hidden } = useMemo(() => filterBotsForList(rankedBots, query), [query, rankedBots]);
   const listedCount = individuals.length + groups.length + hidden.length;
-  const showGatewayEmpty = !isLoading && listedCount === 0 && (error !== null || bots.length === 0);
+  const showGatewayEmpty = !isLoading && bots.length === 0;
   const showSearchEmpty = !isLoading && listedCount === 0 && query.length > 0 && bots.length > 0;
   const showHiddenEmpty = !isLoading && listedCount === 0 && query.length === 0 && bots.length > 0;
-  const listActions = <ChromeActionPanel onRefresh={revalidate} />;
+  const listActions = <ChromeActionPanel kind="refresh" onRefresh={revalidate} />;
   const renderBot = (bot: Bot) => (
     <BotListItem
       key={bot.id}
