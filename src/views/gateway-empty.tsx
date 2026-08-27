@@ -77,12 +77,7 @@ function EmptyActionsPanel({ kind, onRetry }: { kind: EmptyActions; onRetry: () 
   return (
     <ActionPanel>
       <OpenGrokBotAction />
-      <Action
-        title="Retry"
-        icon={Icon.ArrowClockwise}
-        shortcut={Keyboard.Shortcut.Common.Refresh}
-        onAction={onRetry}
-      />
+      <Action title="Retry" icon={Icon.ArrowClockwise} shortcut={Keyboard.Shortcut.Common.Refresh} onAction={onRetry} />
       <Action title="Open Preferences" icon={Icon.Gear} onAction={openExtensionPreferences} />
     </ActionPanel>
   );
