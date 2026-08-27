@@ -86,3 +86,13 @@ export function HiddenBotsEmptyView({ onRefresh }: { onRefresh: () => void }) {
     />
   );
 }
+
+export function RosterLoadingView({ onRetry }: { onRetry: () => void }) {
+  return (
+    <List.EmptyView
+      title="Loading teammates"
+      description="Names appear as they download."
+      actions={<ChromeActionPanel kind="refresh" onRefresh={onRetry} />}
+    />
+  );
+}

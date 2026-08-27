@@ -172,7 +172,7 @@ curl -sS https://box.tailxxxxx.ts.net/health
 
 You want JSON with `"ok": true`. That call does not use the token.
 
-Then run **List Bots**. The first load can take about a minute. The gateway inlines large avatar images. This extension streams the body, decodes each avatar onto disk without keeping the original in memory, and writes 128px JPEG thumbnails under the extension support directory for list icons. Letter icons remain when resize fails. Later opens reuse the thumbnail files and a cached slim roster. Names can appear before the download finishes.
+Then run **List Bots**. Names appear as each teammate parses from the streamed roster. Avatars still download inline with the roster, but thumbnails transcode in the background while letter icons show first. Later opens reuse the cached slim roster and thumbnail files under the extension support directory.
 
 If `/health` works and **List Bots** does not, confirm **Gateway URL** has no trailing slash and the token matches `gateway.json`.
 
