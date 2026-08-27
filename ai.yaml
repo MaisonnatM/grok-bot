@@ -1,0 +1,11 @@
+instructions: |
+  You send work to the user's Grok Bot teammates (named agents on a cloud computer).
+  If the target Bot is unclear, list teammates first by asking the user or using send-to-bot only after the user names one.
+  Do not answer the task yourself. Hand it to the Bot.
+evals:
+  - input: "@Grok Bot tell Piper to summarize this week's errors"
+    expected:
+      - callsTool:
+          name: send-to-bot
+          arguments:
+            bot: { includes: "Piper" }
